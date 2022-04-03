@@ -2416,10 +2416,6 @@ wl_init_timer(wl_info_t *wl, void (*fn)(void *arg), void *arg, const char *tname
 
 	bzero(t, sizeof(wl_timer_t));
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0))
-#define PDE_DATA pde_data
-#endif
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0)
 	timer_setup(&t->timer, wl_timer, 0);
 #else
@@ -3044,7 +3040,7 @@ _wl_add_monitor_if(wl_task_t *task)
 	else
 		dev->type = ARPHRD_IEEE80211_RADIOTAP;
 
-	eth_hw_addr_set(dev, wl->dev->dev_addr);
+	bcopy(wl->dev->dev_addr, dev->dev_addr, ETHER_ADDR_LEN);
 
 #if defined(WL_USE_NETDEV_OPS)
 	dev->netdev_ops = &wl_netdev_monitor_ops;
