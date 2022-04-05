@@ -48,7 +48,7 @@ typedef struct bcm_mem_link {
 struct osl_info {
 	osl_pubinfo_t pub;
 	uint magic;
-	void *pdev;
+	struct pci_dev *pdev;
 	atomic_t malloced;
 	atomic_t pktalloced; 	
 	uint failed;
@@ -600,7 +600,7 @@ osl_dma_alloc_consistent(osl_t *osh, uint size, uint16 align_bits, uint *alloced
 	if (va)
 		*pap = (ulong)__virt_to_phys(va);
 #else
-	va = pci_alloc_consistent(osh->pdev, size, (dma_addr_t*)pap);
+	va = dma_alloc_coherent(&osh->pdev->dev, size, (dma_addr_t *)pap, GFP_ATOMIC);
 #endif
 	return va;
 }
@@ -613,7 +613,7 @@ osl_dma_free_consistent(osl_t *osh, void *va, uint size, ulong pa)
 #ifdef __ARM_ARCH_7A__
 	kfree(va);
 #else
-	pci_free_consistent(osh->pdev, size, va, (dma_addr_t)pa);
+	dma_free_coherent(&osh->pdev->dev, size, va, (dma_addr_t)pa);
 #endif
 }
 
@@ -623,7 +623,7 @@ osl_dma_map(osl_t *osh, void *va, uint size, int direction, void *p, hnddma_seg_
 	int dir;
 
 	ASSERT((osh && (osh->magic == OS_HANDLE_MAGIC)));
-	dir = (direction == DMA_TX)? PCI_DMA_TODEVICE: PCI_DMA_FROMDEVICE;
+	dir = (direction == DMA_TX)? DMA_TO_DEVICE : DMA_FROM_DEVICE;
 
 #if defined(__ARM_ARCH_7A__) && defined(BCMDMASGLISTOSL)
 	if (dmah != NULL) {
@@ -635,13 +635,13 @@ osl_dma_map(osl_t *osh, void *va, uint size, int direction, void *p, hnddma_seg_
 			if (skb_is_nonlinear(skb)) {
 				nsegs = skb_to_sgvec(skb, sg, 0, PKTLEN(osh, skb));
 				ASSERT((nsegs > 0) && (totsegs + nsegs <= MAX_DMA_SEGS));
-				pci_map_sg(osh->pdev, sg, nsegs, dir);
+				dma_map_sg(&osh->pdev->dev, sg, nsegs, dir);
 			} else {
 				nsegs = 1;
 				ASSERT(totsegs + nsegs <= MAX_DMA_SEGS);
 				sg->page_link = 0;
 				sg_set_buf(sg, PKTDATA(osh, skb), PKTLEN(osh, skb));
-				pci_map_single(osh->pdev, PKTDATA(osh, skb), PKTLEN(osh, skb), dir);
+				dma_map_single(&osh->pdev->dev, PKTDATA(osh, skb), PKTLEN(osh, skb), dir);
 			}
 			totsegs += nsegs;
 			totlen += PKTLEN(osh, skb);
@@ -656,7 +656,7 @@ osl_dma_map(osl_t *osh, void *va, uint size, int direction, void *p, hnddma_seg_
 	}
 #endif 
 
-	return (pci_map_single(osh->pdev, va, size, dir));
+	return (dma_map_single(&osh->pdev->dev, va, size, dir));
 }
 
 void BCMFASTPATH
@@ -665,8 +665,8 @@ osl_dma_unmap(osl_t *osh, uint pa, uint size, int direction)
 	int dir;
 
 	ASSERT((osh && (osh->magic == OS_HANDLE_MAGIC)));
-	dir = (direction == DMA_TX)? PCI_DMA_TODEVICE: PCI_DMA_FROMDEVICE;
-	pci_unmap_single(osh->pdev, (uint32)pa, size, dir);
+	dir = (direction == DMA_TX)? DMA_TO_DEVICE : DMA_FROM_DEVICE;
+	dma_unmap_single(&osh->pdev->dev, (uint32)pa, size, dir);
 }
 
 #if defined(BCMDBG_ASSERT)
